@@ -1,6 +1,5 @@
 import os
 
-from bms_fs import get_bms_folder_dir, get_bms_pack_dir
 from bms_media.audio import (
     AUDIO_PRESET_FLAC,
     AUDIO_PRESET_FLAC_FFMPEG,
@@ -16,25 +15,41 @@ from scripts_rawpack import rawpack_unzip_to_bms_folder
 
 
 def main():
+    print("BMS Pack Generator by MiyakoMeow.")
+    print(" - For Pack Update:")
     print(
         "Fast update script, from: Raw Packs set numed, to: delta bms folder just for making pack update."
     )
-    pack_dir = get_bms_pack_dir()
-    root_dir = get_bms_folder_dir()
     print(
-        "This script will use syncing dir for name syncing and file checking, but not modifying sync dir."
+        "You need to set pack num before running this script, see scripts_rawpack/rawpack_set_num.py"
     )
-    sync_dir = input("Input syncing dir:")
+    # Input
+    print(" - Input 1: Pack dir path")
+    pack_dir = input(">")
+    if not os.path.isdir(pack_dir):
+        print("Pack dir is not vaild dir.")
+        return
+    print(" - Input 2: BMS Cache Folder path")
+    root_dir = input(">")
+    if not os.path.isdir(root_dir):
+        print("Root dir is not vaild dir.")
+        return
+    print(" - Input 3: Already exists BMS Folder path")
+    print("This script will use this dir, just for name syncing and file checking.")
+    sync_dir = input(">")
     if not os.path.isdir(sync_dir):
         print("Syncing dir is not vaild dir.")
         return
+    # Confirm
     confirm = input("Sure? [y/N]")
     if not confirm.lower().startswith("y"):
         return
     # Unzip
-    print(f" > 1. Unzip dir name from {sync_dir} to {root_dir}")
+    print(f" > 1. Unzip packs from {pack_dir} to {root_dir}")
     rawpack_unzip_to_bms_folder.main(
-        root_dir=root_dir, pack_dir=pack_dir, cache_dir=root_dir
+        root_dir=root_dir,
+        pack_dir=pack_dir,
+        cache_dir=os.path.join(root_dir, "CacheDir"),
     )
     # Syncing folder name
     print(f" > 2. Syncing dir name from {sync_dir} to {root_dir}")
@@ -51,7 +66,7 @@ def main():
     # Remove Unneed Media File
     print(" > 4. Removing Unneed Files")
     remove_unneed_media_file.main(
-        root_dir, preset=remove_unneed_media_file.PRESET_NORMAL
+        root_dir=root_dir, preset=remove_unneed_media_file.PRESET_NORMAL
     )
     # Soft syncing
     print(f" > 5. Syncing dir files from {sync_dir} to {root_dir}")
