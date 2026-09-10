@@ -232,8 +232,8 @@ OPTIONS: list[Option] = [
         name="BMS原文件：将赋予编号的文件，解压或放置至指定根目录下，带对应编号的作品目录（自动处理文件夹嵌套）",
         inputs=[
             Input(InputType.Path, "Pack Dir"),
-            Input(InputType.Path, "Cache Dir"),
-            Input(InputType.Path, "Root Dir"),
+            Input(InputType.Path, "Cache Dir", allow_missing=True),
+            Input(InputType.Path, "Root Dir", allow_missing=True),
         ],
     ),
     Option(
@@ -241,8 +241,8 @@ OPTIONS: list[Option] = [
         name="BMS原文件：将文件，解压或放置至指定根目录下，对应原文件名的作品目录（自动处理文件夹嵌套）",
         inputs=[
             Input(InputType.Path, "Pack Dir"),
-            Input(InputType.Path, "Cache Dir"),
-            Input(InputType.Path, "Root Dir"),
+            Input(InputType.Path, "Cache Dir", allow_missing=True),
+            Input(InputType.Path, "Root Dir", allow_missing=True),
         ],
     ),
     Option(

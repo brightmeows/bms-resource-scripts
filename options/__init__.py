@@ -18,7 +18,26 @@ _CURRENT_DIR = _CURRENT_PATH.parent
 _LOG_FILE_PATH = _CURRENT_DIR / "history.log"
 
 
-def input_path() -> Path:
+def _path_mark(path: Path) -> str:
+    """历史条目的实时状态标记：只在展示时计算，不写回历史文件。"""
+    if path.is_dir():
+        return ""
+    if path.exists():
+        return "（不是目录）"
+    return "（不存在）"
+
+
+def _path_reject_reason(path: Path, allow_missing: bool) -> str | None:
+    if path.is_dir():
+        return None
+    if path.exists():
+        return f"路径已存在但不是目录：{path}"
+    if allow_missing:
+        return None
+    return f"路径不存在或不是目录：{path}"
+
+
+def input_path(allow_missing: bool = False) -> Path:
     if not _LOG_FILE_PATH.is_file():
         with _LOG_FILE_PATH.open("w") as f:
             f.write("\n")
@@ -45,49 +64,51 @@ def input_path() -> Path:
             unique_paths.append(path)
     paths = unique_paths  # 保存所有选择过的路径
 
-    # 显示历史路径（只显示最近的5个）
+    # 显示历史路径（只显示最近的5个），失效条目附加实时标记
     if len(paths) > 0:
         print("输入路径开始。以下是之前使用过的路径：")
         display_paths = paths[:5]  # 只显示最近的5个
         for i, path in enumerate(display_paths):
-            print(f" -> {i}: {path}")
+            print(f" -> {i}: {path}{_path_mark(path)}")
         if len(paths) > 5:
             print(f"（还有 {len(paths) - 5} 个历史路径，输入？查看全部）")
 
-    # 获取用户输入
-    selection_str = input("直接输入路径，或输入上面的数字（索引）进行选择，输入？查看所有选项：")
+    # 获取用户输入，直到得到符合要求的路径
+    while True:
+        selection_str = input("直接输入路径，或输入上面的数字（索引）进行选择，输入？查看所有选项：").strip()
 
-    # 处理帮助命令
-    if selection_str.strip() in ["？", "?"]:
-        if len(paths) > 0:
-            print("所有可选选项：")
-            for i, path in enumerate(paths):
-                print(f"  {i}: {path}")
-        else:
-            print("暂无历史路径记录")
-        selection_str = input("请输入选择：")
+        # 处理帮助命令
+        if selection_str in ["？", "?"]:
+            if len(paths) > 0:
+                print("所有可选选项：")
+                for i, path in enumerate(paths):
+                    print(f"  {i}: {path}{_path_mark(path)}")
+            else:
+                print("暂无历史路径记录")
+            continue
 
-    # 处理选择
-    if selection_str.isdigit() and 0 <= int(selection_str) < len(paths):
-        selected_path = paths[int(selection_str)]
-        # 将选中的路径移到最前面（最新的位置）
-        paths.pop(int(selection_str))
-        paths.insert(0, selected_path)
-    else:
-        selected_path = Path(selection_str)
-        # 将新路径添加到最前面
-        selected_path_str = str(selected_path)
-        existing_index = None
-        for i, p in enumerate(paths):
-            if str(p) == selected_path_str:
-                existing_index = i
-                break
-        if existing_index is None:
-            paths.insert(0, selected_path)
+        # 处理空输入
+        if len(selection_str) == 0:
+            print(" - 输入为空，请重新输入。")
+            continue
+
+        # 处理选择
+        if selection_str.isdigit() and 0 <= int(selection_str) < len(paths):
+            selected_path = paths[int(selection_str)]
         else:
-            # 如果已存在，移动到最前面
-            paths.pop(existing_index)
-            paths.insert(0, selected_path)
+            selected_path = Path(selection_str)
+
+        # 校验选择
+        reject_reason = _path_reject_reason(selected_path, allow_missing)
+        if reject_reason is not None:
+            print(f" - {reject_reason}，请重新输入。")
+            continue
+        break
+
+    # 将选中的路径移到最前面（最新的位置）
+    if selected_path in paths:
+        paths.remove(selected_path)
+    paths.insert(0, selected_path)
 
     # 保存更新后的路径（保存所有选择过的路径）
     with _LOG_FILE_PATH.open("w") as f:
@@ -109,6 +130,8 @@ class InputType(Enum):
 class Input:
     type: InputType = InputType.Any
     description: str = ""
+    # True 时允许路径不存在（由后续流程创建），但仍要求不是已存在的文件
+    allow_missing: bool = False
 
     def exec_input(self) -> Any:
         match self.type:
@@ -129,7 +152,7 @@ class Input:
                     w_str = input(tips)
                 return int(w_str)
             case InputType.Path:
-                return input_path()
+                return input_path(self.allow_missing)
 
 
 class ConfirmType(Enum):
@@ -171,7 +194,7 @@ class Option:
                     print(f" - 检查 {idx} 异常：{e}")
                     return
                 if not passed:
-                    print(f" - 检查未通过（第 {idx} 项）。")
+                    print(f" - 检查未通过（第 {idx} 项：{getattr(check, '__name__', str(check))}）。")
                     return
         # Confirm
         match self.confirm:
@@ -203,10 +226,17 @@ class Option:
         self.func(*args)
 
 
-def is_root_dir(*root_dir: Path) -> bool:
-    for dir in root_dir:
-        result = len([p.name for p in dir.iterdir() if p.name.endswith(CHART_FILE_EXTS) and p.is_file()]) == 0
-        if not result:
+def is_root_dir(*args: Any) -> bool:
+    for index, arg in enumerate(args, start=1):
+        # 非 Path 参数（如 BMS活动目录的编号）不参与目录校验
+        if not isinstance(arg, Path):
+            continue
+        if not arg.is_dir():
+            print(f" - 参数{index} 路径不存在或不是目录：{arg}")
+            return False
+        has_chart_file = any(p.name.endswith(CHART_FILE_EXTS) and p.is_file() for p in arg.iterdir())
+        if has_chart_file:
+            print(f" - 参数{index} 下存在谱面文件，不是作品根目录：{arg}")
             return False
     return True
 

@@ -208,7 +208,7 @@ OPTIONS = [
         name="大包生成脚本：原包 -> HQ版大包",
         inputs=[
             Input(InputType.Path, "Pack Dir"),
-            Input(InputType.Path, "Root Dir"),
+            Input(InputType.Path, "Root Dir", allow_missing=True),
         ],
         check_func=[check_flac_exec, check_ffmpeg_exec],
     ),
@@ -218,7 +218,7 @@ OPTIONS = [
         check_func=[check_flac_exec, check_ffmpeg_exec, _pack_update_rawpack_to_hq_check],
         inputs=[
             Input(InputType.Path, "Pack Dir"),
-            Input(InputType.Path, "Root Dir"),
+            Input(InputType.Path, "Root Dir", allow_missing=True),
             Input(InputType.Path, "Sync Dir"),
         ],
     ),

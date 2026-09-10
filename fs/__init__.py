@@ -17,7 +17,11 @@ def remove_empty_folder(parent_dir: Path) -> None:
 
 
 def bms_dir_similarity(dir_path_a: Path, dir_path_b: Path) -> float:
-    """两个文件夹中，非媒体文件文件名的相似度。"""
+    """
+    两个文件夹的内容相似度：媒体文件名（stem，不含扩展名）的交集数除以较小侧媒体文件数。
+
+    任一侧没有文件、媒体文件或非媒体文件时返回 0.0。
+    """
     # 相似度
     media_ext_list = (
         ".ogg",
@@ -49,4 +53,4 @@ def bms_dir_similarity(dir_path_a: Path, dir_path_b: Path) -> float:
         return 0.0
     media_set_merge = media_set_a.intersection(media_set_b)
     media_ratio = len(media_set_merge) / min(len(media_set_a), len(media_set_b))
-    return media_ratio  # Use media ratio only?
+    return media_ratio

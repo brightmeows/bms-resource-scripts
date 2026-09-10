@@ -1,8 +1,11 @@
+import difflib
 import re
 import shutil
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
+from fs import bms_dir_similarity
 from fs.move import (
     REPLACE_OPTION_UPDATE_PACK,
     is_dir_having_file,
@@ -298,120 +301,161 @@ def move_out_works(target_root_dir: Path) -> None:
             root_dir_path.rmdir()
 
 
+SIMILARITY_NAME_TRIGGER = 0.7
+SIMILARITY_CONTENT_TRIGGER = 0.8
+
+
+def _subdir_names(dir_path: Path) -> list[str]:
+    return sorted(p.name for p in dir_path.iterdir() if p.is_dir())
+
+
+def _match_dir_pairs(
+    from_dir: Path,
+    to_dirs: list[Path],
+    name_trigger: float = SIMILARITY_NAME_TRIGGER,
+    content_trigger: float = SIMILARITY_CONTENT_TRIGGER,
+) -> tuple[list[tuple[Path, Path, float, float]], list[tuple[Path, Path, float, float]]]:
+    """
+    两道闸门配对：
+
+    1. 闸门1（名称粗筛）：difflib 名称相似度达到 name_trigger，或目标名以来源名为前缀
+    2. 闸门2（内容验证）：bms_dir_similarity（媒体文件 stem 交集率）达到 content_trigger
+
+    每个来源目录至多配对一个目标目录：按内容相似度、名称相似度、名称字典序取最高。
+    返回 (配对列表, 落选提示列表)，元素均为 (from_path, to_path, 名称相似度, 内容相似度)；
+    落选提示为通过闸门1但未过闸门2的候选，不参与合并。
+    """
+    to_name_dirs: list[tuple[str, Path]] = []
+    for to_dir in to_dirs:
+        to_name_dirs.extend((name, to_dir) for name in _subdir_names(to_dir))
+
+    pairs: list[tuple[Path, Path, float, float]] = []
+    rejected: list[tuple[Path, Path, float, float]] = []
+
+    for from_name in _subdir_names(from_dir):
+        from_path = from_dir / from_name
+        best: tuple[float, float, str, Path] | None = None
+        for to_name, to_dir in to_name_dirs:
+            to_path = to_dir / to_name
+            if to_path == from_path:
+                continue
+            # 闸门1：名称粗筛（前缀直通保留旧行为，其余走 quick_ratio 预筛 + ratio）
+            matcher = difflib.SequenceMatcher(None, from_name, to_name)
+            if not to_name.startswith(from_name):
+                if matcher.quick_ratio() < name_trigger:
+                    continue
+                if matcher.ratio() < name_trigger:
+                    continue
+            name_similarity = matcher.ratio()
+            # 闸门2：内容验证
+            content_similarity = bms_dir_similarity(from_path, to_path)
+            if content_similarity < content_trigger:
+                rejected.append((from_path, to_path, name_similarity, content_similarity))
+                continue
+            if best is not None:
+                best_content, best_name, best_to_name, _best_path = best
+                if (content_similarity, name_similarity) < (best_content, best_name):
+                    continue
+                if (content_similarity, name_similarity) == (best_content, best_name) and to_name >= best_to_name:
+                    continue
+            best = (content_similarity, name_similarity, to_name, to_path)
+        if best is not None:
+            best_content, best_name, _best_to_name, best_path = best
+            pairs.append((from_path, best_path, best_name, best_content))
+
+    return pairs, rejected
+
+
+def _print_match_report(
+    pairs: list[tuple[Path, Path, float, float]],
+    rejected: list[tuple[Path, Path, float, float]],
+) -> None:
+    for from_path, to_path, name_similarity, content_similarity in rejected:
+        print(
+            f" -x- 名称相似但内容不符（跳过）: {from_path.name} <=> {to_path.name} "
+            f"(名称: {name_similarity:.2f}, 内容: {content_similarity:.2f})"
+        )
+    target_counts: Counter[Path] = Counter(to_path for _, to_path, _, _ in pairs)
+    for from_path, to_path, name_similarity, content_similarity in pairs:
+        multi_source = " [多来源!]" if target_counts[to_path] > 1 else ""
+        print(
+            f" -> {from_path.name} => {to_path.name} "
+            f"(名称: {name_similarity:.2f}, 内容: {content_similarity:.2f}){multi_source}"
+        )
+
+
 def move_works_with_same_name(root_dir_from: Path, root_dir_to: Path) -> None:
     """
-    将源文件夹(dir_from)中的子文件夹合并到目标文件夹(dir_to)中的对应子文件夹
+    将源文件夹(dir_from)中的子文件夹，经两道闸门匹配后合并到目标文件夹(dir_to)中的对应子文件夹
 
-    规则：
-    1. 对于dir_from中的每个子文件夹A
-    2. 在dir_to中查找名称包含A的子文件夹B
-    3. 如果找到，将A的内容合并到B中
-    4. 递归处理子文件夹内的文件结构
+    匹配规则：
+    1. 闸门1（名称粗筛）：difflib 名称相似度 >= 0.7，或目标名以来源名为前缀
+    2. 闸门2（内容验证）：bms_dir_similarity（媒体文件 stem 交集率）>= 0.8
+    3. 每个来源目录按内容相似度、名称相似度、名称字典序取最高分目标
 
     参数:
-        dir_from (Path): 源文件夹路径
-        dir_to (Path): 目标文件夹路径
+        root_dir_from (Path): 源文件夹路径
+        root_dir_to (Path): 目标文件夹路径
     """
-
-    # 验证输入路径是否存在且为目录
     if not root_dir_from.is_dir():
         raise ValueError(f"源路径不存在或不是目录: {root_dir_from}")
     if not root_dir_to.is_dir():
         raise ValueError(f"目标路径不存在或不是目录: {root_dir_to}")
 
-    # 获取源目录中的所有直接子文件夹
-    from_subdirs: list[str] = [d for d in [p.name for p in root_dir_from.iterdir()] if (root_dir_from / d).is_dir()]
+    pairs, rejected = _match_dir_pairs(root_dir_from, [root_dir_to])
+    _print_match_report(pairs, rejected)
 
-    # 获取目标目录中的所有直接子文件夹
-    to_subdirs: list[str] = [d for d in [p.name for p in root_dir_to.iterdir()] if (root_dir_to / d).is_dir()]
+    if len(pairs) == 0:
+        print("没有找到可合并的目录对。")
+        return
 
-    pairs: list[tuple[str, Path, str, Path]] = []
-
-    # 遍历源目录的每个子文件夹
-    for from_dir_name in from_subdirs:
-        from_dir_path: Path = root_dir_from / from_dir_name
-
-        # 查找匹配的目标子文件夹（名称以源文件夹名开头）
-        for to_dir_name in to_subdirs:
-            if to_dir_name.startswith(from_dir_name):
-                to_dir_path: Path = root_dir_to / to_dir_name
-                pairs.append((from_dir_name, from_dir_path, to_dir_name, to_dir_path))
-                break
-
-    for from_dir_name, _from_dir_path, to_dir_name, _target_path in pairs:
-        print(f" -> {from_dir_name} => {to_dir_name}")
-    selection = input("是否合并？[y/N]")
+    selection = input(f"共 {len(pairs)} 对。是否合并？[y/N]")
     if not selection.lower().startswith("y"):
         return
 
-    # 将源文件夹内容合并到每个匹配的目标文件夹
-    for _, from_dir_path, _, target_path in pairs:
-        print(f"合并: '{from_dir_path}' -> '{target_path}'")
+    for from_path, to_path, _, _ in pairs:
+        print(f"合并: '{from_path}' -> '{to_path}'")
         move_elements_across_dir(
-            from_dir_path,
-            target_path,
+            from_path,
+            to_path,
             replace_options=REPLACE_OPTION_UPDATE_PACK,
         )
 
 
 def move_works_with_same_name_to_siblings(root_dir_from: Path) -> None:
     """
-    将源文件夹(dir_from)中的子文件夹合并到同级目录中的对应子文件夹
+    将源文件夹(dir_from)中的子文件夹，经两道闸门匹配后合并到同级目录中的对应子文件夹
 
-    规则：
-    1. 对于dir_from中的每个子文件夹A
-    2. 在其父目录下的所有其他同级目录中查找名称包含A的子文件夹B
-    3. 如果找到，将A的内容合并到每个B中
-    4. 递归处理子文件夹内的文件结构
+    匹配规则与 move_works_with_same_name 相同（名称粗筛 + 内容验证），
+    目标范围为父目录下除自身外的所有同级目录的直接子目录。
 
     参数:
-        dir_from (Path): 源文件夹路径
+        root_dir_from (Path): 源文件夹路径
     """
-
-    # 验证输入路径是否存在且为目录
     if not root_dir_from.is_dir():
         raise ValueError(f"源路径不存在或不是目录: {root_dir_from}")
 
     parent_dir = root_dir_from.parent
     root_base_name = root_dir_from.name
 
-    # 获取源目录中的所有直接子文件夹
-    from_subdirs: list[str] = [d for d in [p.name for p in root_dir_from.iterdir()] if (root_dir_from / d).is_dir()]
+    to_dirs: list[Path] = [parent_dir / name for name in _subdir_names(parent_dir) if name != root_base_name]
 
-    # 收集合并对： (from_dir_path, target_path)
-    pairs: list[tuple[Path, Path]] = []
+    pairs, rejected = _match_dir_pairs(root_dir_from, to_dirs)
+    _print_match_report(pairs, rejected)
 
-    # 遍历同级目录（排除自身）
-    for sibling_name in [p.name for p in parent_dir.iterdir()]:
-        sibling_path = parent_dir / sibling_name
-        if sibling_name == root_base_name or not sibling_path.is_dir():
-            continue
+    if len(pairs) == 0:
+        print("没有找到可合并的目录对。")
+        return
 
-        # 该同级目录中的直接子目录
-        to_subdirs: list[str] = [d for d in [p.name for p in sibling_path.iterdir()] if (sibling_path / d).is_dir()]
-
-        # 查找匹配并添加合并对
-        for from_dir_name in from_subdirs:
-            from_dir_path = root_dir_from / from_dir_name
-            for to_dir_name in to_subdirs:
-                if to_dir_name.startswith(from_dir_name):
-                    target_path = sibling_path / to_dir_name
-                    pairs.append((from_dir_path, target_path))
-                    break
-
-    for from_dir_path, target_path in pairs:
-        print(f" -> {from_dir_path.name} => {target_path}")
-
-    selection = input("是否合并到各平级目录？[y/N]")
+    selection = input(f"共 {len(pairs)} 对。是否合并到各平级目录？[y/N]")
     if not selection.lower().startswith("y"):
         return
 
-    # 将源文件夹内容合并到每个匹配的目标文件夹
-    for from_dir_path, target_path in pairs:
-        print(f"合并: '{from_dir_path}' -> '{target_path}'")
+    for from_path, to_path, _, _ in pairs:
+        print(f"合并: '{from_path}' -> '{to_path}'")
         move_elements_across_dir(
-            from_dir_path,
-            target_path,
+            from_path,
+            to_path,
             replace_options=REPLACE_OPTION_UPDATE_PACK,
         )
 
@@ -426,7 +470,7 @@ OPTIONS: list[Option] = [
     Option(
         undo_split_pack,
         name="BMS大包目录：（撤销操作）将该目录下的作品，按照首字符分成多个文件夹",
-        inputs=[Input(InputType.Path, "The target folder path.")],
+        inputs=[Input(InputType.Path, "The target folder path.", allow_missing=True)],
         check_func=is_not_a_dir,
     ),
     Option(
