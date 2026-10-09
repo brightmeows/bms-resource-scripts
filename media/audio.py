@@ -22,21 +22,15 @@ class AudioPreset:
 
 
 AUDIO_PRESET_OGG_Q10 = AudioPreset("oggenc", "ogg", "-q10")
-AUDIO_PRESET_OGG_FFMPEG = AudioPreset("ffmpeg", "ogg", "")
 
-AUDIO_PRESET_WAV_FFMPEG = AudioPreset("ffmpeg", "wav", None)
 AUDIO_PRESET_WAV_FROM_FLAC = AudioPreset("flac", "wav", "-d --keep-foreign-metadata-if-present -f")
 
 AUDIO_PRESET_FLAC = AudioPreset("flac", "flac", "--keep-foreign-metadata-if-present --best -f")
-AUDIO_PRESET_FLAC_FFMPEG = AudioPreset("ffmpeg", "flac", "")
 
 AUDIO_PRESETS = [
     AUDIO_PRESET_FLAC,
     AUDIO_PRESET_WAV_FROM_FLAC,
     AUDIO_PRESET_OGG_Q10,
-    AUDIO_PRESET_FLAC_FFMPEG,
-    AUDIO_PRESET_WAV_FFMPEG,
-    AUDIO_PRESET_OGG_FFMPEG,
 ]
 
 
@@ -47,12 +41,7 @@ def _get_audio_precess_cmd(
 ) -> str:
     # Execute
     arg = preset.arg if preset.arg is not None else ""
-    if preset.exec == "ffmpeg":
-        return (
-            f'ffmpeg -hide_banner -loglevel panic -i "{file_path}" '
-            f'-f {preset.output_format} -map_metadata 0 {arg} "{output_file_path}"'
-        )
-    elif preset.exec == "oggenc":
+    if preset.exec == "oggenc":
         return f'oggenc {arg} "{file_path}" -o "{output_file_path}"'
     elif preset.exec == "flac":
         return f'flac {arg} "{file_path}" -o "{output_file_path}"'
@@ -224,21 +213,10 @@ def transfer_audio_by_format_in_dir(
 
 
 MODES: list[tuple[str, list[str], list[AudioPreset]]] = [
-    (
-        "Convert: WAV to FLAC",
-        ["wav"],
-        [
-            AUDIO_PRESET_FLAC,
-            AUDIO_PRESET_FLAC_FFMPEG,
-        ],
-    ),
+    ("Convert: WAV to FLAC", ["wav"], [AUDIO_PRESET_FLAC]),
     ("Compress: FLAC to OGG Q10", ["flac"], [AUDIO_PRESET_OGG_Q10]),
     ("Compress: WAV to OGG Q10", ["wav"], [AUDIO_PRESET_OGG_Q10]),
-    (
-        "Reverse: FLAC to WAV",
-        ["flac"],
-        [AUDIO_PRESET_WAV_FROM_FLAC, AUDIO_PRESET_WAV_FFMPEG],
-    ),
+    ("Reverse: FLAC to WAV", ["flac"], [AUDIO_PRESET_WAV_FROM_FLAC]),
 ]
 
 

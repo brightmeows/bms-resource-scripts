@@ -79,7 +79,7 @@ OPTIONS = [
         inputs=[
             Input(InputType.Path, "Root Dir"),
         ],
-        check_func=[is_root_dir, check_ffmpeg_exec, check_flac_exec, check_oggenc_exec],
+        check_func=[is_root_dir, check_flac_exec, check_oggenc_exec],
     ),
     Option(
         func=transfer_video,
