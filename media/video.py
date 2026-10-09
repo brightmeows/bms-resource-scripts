@@ -1,4 +1,3 @@
-import copy
 import json
 import subprocess
 from pathlib import Path
@@ -191,10 +190,13 @@ def process_video_in_dir(
     if len(file_name_list) > 0:
         print("Entering dir:", dir)
 
+    # Origin files are only removed after the converted output is verified
+    # to exist and be non-empty. Files that fail every preset are kept.
     for file_name in file_name_list:
         file_path = dir / file_name
-        # Get prefered
-        presets_for_file = copy.deepcopy(presets)
+        # Get prefered. No deepcopy: the loop must keep object identity with
+        # presets so the last-preset error report below can match.
+        presets_for_file = presets
         if use_prefered:
             presets_new = get_prefered_preset_list(file_path)
             presets_new.extend(presets_for_file)
@@ -209,18 +211,26 @@ def process_video_in_dir(
                 if remove_existing_target_file:
                     output_file_path.unlink()
                 else:
+                    # Target already exists: same as a success, do not try
+                    # the remaining presets on this file.
                     print(f"File exists: {output_file_path}")
-                    continue
+                    if remove_origin_file and file_path.is_file():
+                        file_path.unlink()
+                    break
             # Process
             cmd = preset.get_video_process_cmd(file_path, output_file_path)
             print(f"Processing Video: {file_path} Preset: {preset}")
             result = subprocess.run(cmd, shell=True, capture_output=True)
-            if result.returncode != 0:
+            output_verified = (
+                result.returncode == 0 and output_file_path.is_file() and output_file_path.stat().st_size > 0
+            )
+            if not output_verified:
                 if output_file_path.is_file():
                     output_file_path.unlink()
                 if preset is presets[-1]:
                     print("Has Error!")
                     print("Cmd: ", cmd)
+                    print("Return code: ", result.returncode)
                     print("Stdout:", result.stdout)
                     print("Stderr:", result.stderr)
                     has_error = True

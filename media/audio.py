@@ -1,7 +1,10 @@
+import dataclasses
 import multiprocessing
 import subprocess
+import tempfile
 import time
 from pathlib import Path
+from typing import IO
 
 """
 Audio
@@ -34,6 +37,19 @@ AUDIO_PRESETS = [
 ]
 
 
+@dataclasses.dataclass
+class _AudioProcess:
+    """One in-flight conversion task inside transfer_audio_by_format_in_dir."""
+
+    file_path: Path
+    preset_index: int
+    process: subprocess.Popen | None
+    stderr_file: IO[bytes] | None
+    # True when the task was skipped because a valid target file already existed.
+    target_existed: bool
+    error_message: str | None = None
+
+
 def _get_audio_precess_cmd(
     file_path: Path,
     output_file_path: Path,
@@ -54,13 +70,16 @@ def transfer_audio_by_format_in_dir(
     input_exts: list[str],
     presets: list[AudioPreset],
     remove_origin_file_when_success: bool = True,
-    remove_origin_file_when_failed: bool = False,
     remove_existing_target_file: bool = True,
 ) -> bool:
     """
     Example:
     wav flac flac
     wav ogg ogg -ab 320k
+
+    Origin files are only removed after the converted output is verified
+    to exist and be non-empty. Files that fail every preset are kept on
+    disk for manual handling; they are never deleted.
     """
 
     def check_input_file(dir: Path, file_name: str, input_exts: list[str]) -> Path | None:
@@ -76,19 +95,26 @@ def transfer_audio_by_format_in_dir(
             return None
         return dir / file_name
 
-    def spawn_parse_audio_process(
-        file_path: Path, preset_index: int, preset: AudioPreset
-    ) -> tuple[tuple[Path, int], subprocess.Popen | None]:
+    def get_output_file_path(file_path: Path, preset: AudioPreset) -> Path:
+        return file_path.parent / (file_path.stem + "." + preset.output_format)
+
+    def remove_origin_file(file_path: Path) -> None:
+        if remove_origin_file_when_success and file_path.is_file():
+            try:
+                file_path.unlink()
+            except PermissionError:
+                print(f" -> PermissionError When Deleting: {file_path}")
+
+    def spawn_parse_audio_process(file_path: Path, preset_index: int, preset: AudioPreset) -> _AudioProcess:
         # New cmd
-        output_file_path = file_path.parent / (file_path.stem + "." + preset.output_format)
+        output_file_path = get_output_file_path(file_path, preset)
         # Target File exists?
         if output_file_path.is_file():
             if output_file_path.stat().st_size > 0 and not remove_existing_target_file:
                 print(f" - File {output_file_path} exists! Skipping...")
-                return (file_path, preset_index), None
-            else:
-                print(f" - Remove existing file: {output_file_path}")
-                output_file_path.unlink()
+                return _AudioProcess(file_path, preset_index, None, None, True)
+            print(f" - Remove existing file: {output_file_path}")
+            output_file_path.unlink()
         # Run cmd
         cmd = _get_audio_precess_cmd(
             file_path,
@@ -96,21 +122,23 @@ def transfer_audio_by_format_in_dir(
             preset,
         )
         if len(cmd) == 0:
-            return (file_path, preset_index), None
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return (file_path, preset_index), process
+            return _AudioProcess(file_path, preset_index, None, None, False)
+        # stderr must go to a real file: with a pipe, a chatty encoder blocks
+        # forever once the 64KB pipe buffer fills up, because nothing drains
+        # it while we only poll the process.
+        stderr_file = tempfile.TemporaryFile(mode="w+b")
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=stderr_file)
+        return _AudioProcess(file_path, preset_index, process, stderr_file, False)
 
     has_error = False
-    err_file_path = ""
-    err_stdout = b""
-    err_stderr = b""
+    error_reports: list[str] = []
 
     # 创建线程池
     hdd = dir.drive.upper() != "C:"
     max_workers = min(multiprocessing.cpu_count(), 24) if hdd else multiprocessing.cpu_count()
 
     # Submit
-    processes: list[tuple[tuple[Path, int], subprocess.Popen | None]] = []
+    processes: list[_AudioProcess] = []
     task_args: list[tuple[Path, int, AudioPreset]] = [
         (dir / file_name, 0, presets[0])
         for file_name in [p.name for p in dir.iterdir()]
@@ -133,54 +161,65 @@ def transfer_audio_by_format_in_dir(
 
     # 等待所有任务完成
     while len(processes) > 0:
-        new_processes: list[tuple[tuple[Path, int], subprocess.Popen | None]] = []
+        new_processes: list[_AudioProcess] = []
 
         # 检查进程状态
-        switch_next_list: list[tuple[Path, int]] = []
-        for process_tuple in processes:
-            (file_path, preset_index), process = process_tuple
+        switch_next_list: list[_AudioProcess] = []
+        for task in processes:
             # Switch Next?
             switch_next = False
-            if process is None:
-                # Empty process
-                switch_next = True
+            if task.process is None:
+                # No process: either skipped because a valid target file
+                # already existed (same as a success), or no command for
+                # this preset (same as a failure).
+                if task.target_existed:
+                    remove_origin_file(task.file_path)
+                else:
+                    switch_next = True
+                    task.error_message = f"Preset {task.preset_index} produced no command for file: {task.file_path}"
             else:
-                process_returncode = process.poll()
+                process_returncode = task.process.poll()
                 if process_returncode is None:
                     # Running
-                    new_processes.append(((file_path, preset_index), process))
-                elif process_returncode == 0:
-                    # Succcess
-                    if remove_origin_file_when_success and file_path.is_file():
-                        try:
-                            file_path.unlink()
-                        except PermissionError:
-                            print(f" -> PermissionError When Deleting: {file_path}")
+                    new_processes.append(task)
                 else:
-                    # Failed
-                    switch_next = True
-                    err_stdout, err_stderr = process.communicate()
+                    output_file_path = get_output_file_path(task.file_path, presets[task.preset_index])
+                    output_verified = (
+                        process_returncode == 0 and output_file_path.is_file() and output_file_path.stat().st_size > 0
+                    )
+                    if output_verified:
+                        # Verified Success
+                        remove_origin_file(task.file_path)
+                    else:
+                        # Failed (or output missing/empty): keep the origin file.
+                        switch_next = True
+                        stderr_text = ""
+                        if task.stderr_file is not None:
+                            task.stderr_file.seek(0)
+                            stderr_text = task.stderr_file.read().decode(errors="replace")
+                            task.stderr_file.close()
+                        task.error_message = (
+                            f"Preset {task.preset_index} failed"
+                            f" (return code {process_returncode}) for file: {task.file_path}\n"
+                            f"stderr:\n{stderr_text}"
+                        )
 
             if switch_next:
-                switch_next_list.append((file_path, preset_index))
+                switch_next_list.append(task)
 
         # 切换下个预设
-        for file_path, preset_index in switch_next_list:
-            new_preset_index = preset_index + 1
+        for task in switch_next_list:
+            new_preset_index = task.preset_index + 1
             if new_preset_index not in range(0, len(presets)):
-                # Last, Return
+                # All presets failed. Never delete the origin file here.
                 has_error = True
-                # Remove Origin files
-                if remove_origin_file_when_failed and file_path.is_file():
-                    try:
-                        file_path.unlink()
-                    except PermissionError:
-                        print(f" -> PermissionError When Deleting: {file_path}")
+                if task.error_message is not None:
+                    error_reports.append(task.error_message)
                 continue
             # Count
-            fallback_file_names.append((file_path.name, new_preset_index))
+            fallback_file_names.append((task.file_path.name, new_preset_index))
             # Try Next
-            task_args.append((file_path, new_preset_index, presets[new_preset_index]))
+            task_args.append((task.file_path, new_preset_index, presets[new_preset_index]))
 
         # 启动新进程
         running_count_delta = 0
@@ -196,13 +235,11 @@ def transfer_audio_by_format_in_dir(
         # 休眠一阵子
         time.sleep(0.001)
 
-    if has_error:
+    if len(error_reports) > 0:
         print("Has Error!")
-        print("- Err file_path: ", err_file_path)
-        print("- Err stdout: ", err_stdout)
-        print("- Err stderr: ", err_stderr)
-        if remove_origin_file_when_failed:
-            print(" ! The failed origin file has been removed.")
+        for report in error_reports:
+            print("-", report)
+        print(" ! Failed files are kept on disk.")
 
     if file_count > 0:
         print(f" -v- Parsed {file_count} file(s).")
@@ -225,7 +262,6 @@ def bms_folder_transfer_audio(
     input_ext: list[str] | None = None,
     transfer_mode: list[AudioPreset] | None = None,
     remove_origin_file_when_success: bool = True,
-    remove_origin_file_when_failed: bool = True,
     stop_on_error: bool = False,
 ) -> None:
     # Select Modes
@@ -249,7 +285,6 @@ def bms_folder_transfer_audio(
             input_ext,
             transfer_mode,
             remove_origin_file_when_success=remove_origin_file_when_success,
-            remove_origin_file_when_failed=remove_origin_file_when_failed,
         )
         if not is_success:
             print(" - Dir:", bms_dir_path, "Error occured!")

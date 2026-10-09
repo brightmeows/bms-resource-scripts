@@ -38,7 +38,6 @@ def transfer_audio(root_dir: Path) -> None:
         input_ext=list(AUDIO_FILE_EXTS),
         transfer_mode=[preset],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=False,
         stop_on_error=True,
     )
 

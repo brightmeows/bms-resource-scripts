@@ -43,7 +43,6 @@ def pack_raw_to_hq(root_dir: Path) -> None:
         input_ext=["wav"],
         transfer_mode=[AUDIO_PRESET_FLAC],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=True,
         stop_on_error=False,
     )
     # Remove Unneed Media File
@@ -60,7 +59,6 @@ def pack_hq_to_lq(root_dir: Path) -> None:
         input_ext=["flac"],
         transfer_mode=[AUDIO_PRESET_OGG_Q10],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=False,
         stop_on_error=False,
     )
     # Parse Audio
