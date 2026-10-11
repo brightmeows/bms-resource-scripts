@@ -1,0 +1,20 @@
+# markdownlint 配置
+#
+# 规则文档: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+# 默认启用全部规则；仅对中文技术文档确有冲突的规则做定点豁免。
+# 注意：TOML 顶层键必须写在所有 [表] 之前。
+
+default = true
+
+# MD060 表格列样式：CJK 与代码混排时列对齐误报严重，只要求管道两侧空格一致
+MD060 = { style = "compact" }
+
+# MD013 行长度：中文与 URL 混排需要更多空间；代码块与表格不强制折行
+[MD013]
+line_length = 200
+code_blocks = false
+tables = false
+
+# MD033 允许的内联 HTML：文档中用于折行与代码样式
+[MD033]
+allowed_elements = ["br", "code", "pre", "details", "summary"]
