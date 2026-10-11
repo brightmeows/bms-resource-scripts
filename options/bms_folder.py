@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from bms import MEDIA_FILE_EXTS, BMSInfo, get_dir_bms_info
+from bms.encoding import BOFTT_ID_SPECIFIC_ENCODING_TABLE
 from fs import SIMILARITY_CONTENT_TRIGGER, bms_dir_similarity
 from fs.move import REPLACE_OPTION_UPDATE_PACK, move_elements_across_dir
 from fs.name import get_valid_fs_name
@@ -41,7 +42,7 @@ def append_artist_name_by_bms(root_dir: Path) -> None:
         shutil.move(from_dir_path, target_dir_path)
 
 
-def _workdir_append_name_by_bms(work_dir: Path) -> bool:
+def _workdir_append_name_by_bms(work_dir: Path, id_encoding_table: dict[str, str] | None = None) -> bool:
     """
     该脚本适用于原有文件夹名与BMS文件无关内容的情况。
     会在文件夹名后添加". 标题 [艺术家]"
@@ -50,7 +51,7 @@ def _workdir_append_name_by_bms(work_dir: Path) -> bool:
         print(f"{work_dir} has been renamed! Skipping...")
         return False
 
-    info: BMSInfo | None = get_dir_bms_info(work_dir)
+    info: BMSInfo | None = get_dir_bms_info(work_dir, id_encoding_table)
     if info is None:
         print(f"{work_dir} has no bms/bmson files!")
         return False
@@ -66,7 +67,7 @@ def _workdir_append_name_by_bms(work_dir: Path) -> bool:
     return True
 
 
-def append_name_by_bms(root_dir: Path) -> None:
+def append_name_by_bms(root_dir: Path, id_encoding_table: dict[str, str] | None = None) -> None:
     """
     该脚本用于重命名作品文件夹。
     格式："标题 [艺术家]"
@@ -76,7 +77,7 @@ def append_name_by_bms(root_dir: Path) -> None:
         dir_path = root_dir / dir_name
         if not dir_path.is_dir():
             continue
-        result = _workdir_append_name_by_bms(dir_path)
+        result = _workdir_append_name_by_bms(dir_path, id_encoding_table)
         if not result:
             fail_list.append(dir_name)
     if len(fail_list) > 0:
@@ -84,8 +85,8 @@ def append_name_by_bms(root_dir: Path) -> None:
         print(fail_list)
 
 
-def _workdir_set_name_by_bms(work_dir: Path) -> bool:
-    info: BMSInfo | None = get_dir_bms_info(work_dir)
+def _workdir_set_name_by_bms(work_dir: Path, id_encoding_table: dict[str, str] | None = None) -> bool:
+    info: BMSInfo | None = get_dir_bms_info(work_dir, id_encoding_table)
     while info is None:
         print(f"{work_dir} has no bms/bmson files! Trying to move out.")
         bms_dir_elements = [p.name for p in work_dir.iterdir()]
@@ -105,7 +106,7 @@ def _workdir_set_name_by_bms(work_dir: Path) -> bool:
             return False
         print(" - Moving out files...")
         move_elements_across_dir(bms_dir_inner, work_dir)
-        info = get_dir_bms_info(work_dir)
+        info = get_dir_bms_info(work_dir, id_encoding_table)
 
     parent_dir = work_dir.parent
 
@@ -142,7 +143,7 @@ def _workdir_set_name_by_bms(work_dir: Path) -> bool:
     return True
 
 
-def set_name_by_bms(root_dir: Path) -> None:
+def set_name_by_bms(root_dir: Path, id_encoding_table: dict[str, str] | None = None) -> None:
     """
     该脚本用于重命名作品文件夹。
     格式："标题 [艺术家]"
@@ -152,12 +153,22 @@ def set_name_by_bms(root_dir: Path) -> None:
         dir_path = root_dir / dir_name
         if not dir_path.is_dir():
             continue
-        result = _workdir_set_name_by_bms(dir_path)
+        result = _workdir_set_name_by_bms(dir_path, id_encoding_table)
         if not result:
             fail_list.append(dir_name)
     if len(fail_list) > 0:
         print("Fail Count:", len(fail_list))
         print(fail_list)
+
+
+def append_name_by_bms_boftt(root_dir: Path) -> None:
+    """BOF:TT 专用：套用 BOFTT_ID_SPECIFIC_ENCODING_TABLE 之后追加命名。"""
+    append_name_by_bms(root_dir, BOFTT_ID_SPECIFIC_ENCODING_TABLE)
+
+
+def set_name_by_bms_boftt(root_dir: Path) -> None:
+    """BOF:TT 专用：套用 BOFTT_ID_SPECIFIC_ENCODING_TABLE 之后设置命名。"""
+    set_name_by_bms(root_dir, BOFTT_ID_SPECIFIC_ENCODING_TABLE)
 
 
 def copy_numbered_workdir_names(root_dir_from: Path, root_dir_to: Path) -> None:
@@ -283,6 +294,18 @@ OPTIONS: list[Option] = [
     Option(
         append_name_by_bms,
         name="BMS根目录：按照BMS追加文件夹名",
+        inputs=[Input(InputType.Path, "Root Dir")],
+        check_func=is_root_dir,
+    ),
+    Option(
+        set_name_by_bms_boftt,
+        name="BMS根目录：按照BMS设置文件夹名（BOFTT 编码表）",
+        inputs=[Input(InputType.Path, "Root Dir")],
+        check_func=is_root_dir,
+    ),
+    Option(
+        append_name_by_bms_boftt,
+        name="BMS根目录：按照BMS追加文件夹名（BOFTT 编码表）",
         inputs=[Input(InputType.Path, "Root Dir")],
         check_func=is_root_dir,
     ),
