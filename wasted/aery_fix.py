@@ -10,18 +10,18 @@ def main() -> None:
     if not src_dir.is_dir():
         print(f"{src_dir}: not a dir.")
         return
-    dirs = [dir for dir in [p.name for p in src_dir.iterdir()] if (src_dir / dir).is_dir()]
+    dirs = [name for name in [p.name for p in src_dir.iterdir()] if (src_dir / name).is_dir()]
     # 扫描所有带aery的目录
     aery_pair: list[tuple[Path, Path, float]] = []
-    for dir in dirs:
-        if dir.find("Aery") == -1 and dir.find("AERY") == -1:
+    for dir_name in dirs:
+        if dir_name.find("Aery") == -1 and dir_name.find("AERY") == -1:
             continue
         # 源目录
-        dir_path = src_dir / dir
-        for i in range(len(dir)):
+        dir_path = src_dir / dir_name
+        for i in range(len(dir_name)):
             # 按长度寻找，排除自身，确认只剩下一个结果
             sub_len = i + 1
-            scan_dirs = [sub_dir for sub_dir in dirs if sub_dir.startswith(dir[:sub_len]) and sub_dir != dir]
+            scan_dirs = [sub_dir for sub_dir in dirs if sub_dir.startswith(dir_name[:sub_len]) and sub_dir != dir_name]
             if len(scan_dirs) != 1:
                 continue
             scan_dir = scan_dirs[0]

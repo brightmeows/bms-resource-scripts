@@ -1,3 +1,4 @@
+import contextlib
 import shutil
 from pathlib import Path
 
@@ -8,6 +9,9 @@ from fs.rawpack import (
     unzip_file_to_cache_dir,
 )
 from options import Input, InputType, Option
+
+# “索引 + 编号”两段输入的 token 数
+TWO_INPUT_TOKENS = 2
 
 
 def unzip_numeric_to_bms_folder(pack_dir: Path, cache_dir: Path, root_dir: Path, confirm: bool = False) -> None:
@@ -69,10 +73,8 @@ def unzip_numeric_to_bms_folder(pack_dir: Path, cache_dir: Path, root_dir: Path,
         # Move cache to bms dir
         print(f" > Moving files in {cache_dir_path} to {target_dir_path}")
         move_elements_across_dir(cache_dir_path, target_dir_path)
-        try:
+        with contextlib.suppress(FileNotFoundError):
             cache_dir_path.rmdir()
-        except FileNotFoundError:
-            pass
 
         # Move File to Another dir
         print(f" > Finish dealing with file: {file_name}")
@@ -91,8 +93,7 @@ def unzip_with_name_to_bms_folder(pack_dir: Path, cache_dir: Path, root_dir: Pat
     num_set_file_names: list[str] = [
         file_name
         for file_name in [p.name for p in pack_dir.iterdir()]
-        if (pack_dir / file_name).is_file()
-        and (file_name.endswith(".zip") or file_name.endswith(".7z") or file_name.endswith(".rar"))
+        if (pack_dir / file_name).is_file() and (file_name.endswith((".zip", ".7z", ".rar")))
     ]
 
     if confirm:
@@ -131,10 +132,8 @@ def unzip_with_name_to_bms_folder(pack_dir: Path, cache_dir: Path, root_dir: Pat
         # Move cache to bms dir
         print(f" > Moving files in {cache_dir_path} to {target_dir_path}")
         move_elements_across_dir(cache_dir_path, target_dir_path)
-        try:
+        with contextlib.suppress(FileNotFoundError):
             cache_dir_path.rmdir()
-        except FileNotFoundError:
-            pass
 
         # Move File to Another dir
         print(f" > Finish dealing with file: {file_name}")
@@ -144,17 +143,17 @@ def unzip_with_name_to_bms_folder(pack_dir: Path, cache_dir: Path, root_dir: Pat
         shutil.move(file_path, used_pack_dir / file_name)
 
 
-def _rename_file_with_num(dir: Path, file_name: str, input_num: int) -> None:
-    file_path = dir / file_name
+def _rename_file_with_num(dir_path: Path, file_name: str, input_num: int) -> None:
+    file_path = dir_path / file_name
     new_file_name = f"{input_num} {file_name}"
-    new_file_path = dir / new_file_name
+    new_file_path = dir_path / new_file_name
     shutil.move(file_path, new_file_path)
     print(f"Rename {file_name} to {new_file_name}.")
     print()
 
 
 def _set_file_num(
-    dir: Path,
+    dir_path: Path,
     allow_ext: list[str] | None = None,
     disallow_ext: list[str] | None = None,
     allow_others: bool = True,
@@ -164,8 +163,8 @@ def _set_file_num(
     if allow_ext is None:
         allow_ext = []
     file_names = []
-    for file_name in [p.name for p in dir.iterdir()]:
-        file_path = dir / file_name
+    for file_name in [p.name for p in dir_path.iterdir()]:
+        file_path = dir_path / file_name
         # Not File?
         if not file_path.is_file():
             continue
@@ -191,7 +190,7 @@ def _set_file_num(
         file_names.append(file_name)
 
     # Print Selections
-    print(f"Here are files in {dir}:")
+    print(f"Here are files in {dir_path}:")
     for i, file_name in enumerate(file_names):
         print(f" - {i}: {file_name}")
 
@@ -199,23 +198,23 @@ def _set_file_num(
     print("Input two numbers: to set num [1] to the selection in index [0].")
     input_str = input("Input:")
     input_str_split = input_str.split()
-    if len(input_str_split) == 2:
+    if len(input_str_split) == TWO_INPUT_TOKENS:
         file_name = file_names[int(input_str_split[0])]
         input_num = int(input_str_split[1])
-        _rename_file_with_num(dir, file_name, input_num)
+        _rename_file_with_num(dir_path, file_name, input_num)
     elif len(input_str_split) == 1:
         file_name = file_names[0]
         input_num = int(input_str_split[0])
-        _rename_file_with_num(dir, file_name, input_num)
+        _rename_file_with_num(dir_path, file_name, input_num)
     else:
         print("Invaild input.")
         print()
 
 
-def set_file_num(dir: Path) -> None:
+def set_file_num(dir_path: Path) -> None:
     while True:
         _set_file_num(
-            dir,
+            dir_path,
             allow_ext=["zip", "7z", "rar", "mp4", "bms", "bme", "bml", "pms"],
             disallow_ext=[],
             allow_others=False,

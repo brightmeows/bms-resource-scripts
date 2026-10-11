@@ -20,3 +20,7 @@ path_history.json
 
 # Rust cache
 /target
+
+# Build output
+dist/
+.ty_cache/

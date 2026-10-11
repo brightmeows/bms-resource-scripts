@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 
 from bms import MEDIA_FILE_EXTS, BMSInfo, get_dir_bms_info
-from fs import bms_dir_similarity
+from fs import SIMILARITY_CONTENT_TRIGGER, bms_dir_similarity
 from fs.move import REPLACE_OPTION_UPDATE_PACK, move_elements_across_dir
 from fs.name import get_valid_fs_name
 from options import Input, InputType, Option, is_root_dir
@@ -129,7 +129,7 @@ def _workdir_set_name_by_bms(work_dir: Path) -> bool:
     # Same dir?
     similarity = bms_dir_similarity(work_dir, new_dir_path)
     print(f" - Directory {new_dir_path} exists! Similarity: {similarity}")
-    if similarity < 0.8:
+    if similarity < SIMILARITY_CONTENT_TRIGGER:
         print(" - Merge canceled.")
         return False
 

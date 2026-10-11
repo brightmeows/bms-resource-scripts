@@ -5,7 +5,7 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
-from fs import bms_dir_similarity
+from fs import SIMILARITY_CONTENT_TRIGGER, bms_dir_similarity
 from fs.move import (
     REPLACE_OPTION_UPDATE_PACK,
     is_dir_having_file,
@@ -112,8 +112,11 @@ def merge_split_folders(root_dir: Path) -> None:
             dir_names_with_starter = [
                 dir_name for dir_name in dir_names if dir_name.startswith(f"{dir_name_without_artist} [")
             ]
-            if len(dir_names_with_starter) > 2:
-                print(f" !_! {dir_name_without_artist} have more then 2 folders! {dir_names_with_starter}")
+            if len(dir_names_with_starter) > MAX_PREFIX_DIR_COUNT:
+                print(
+                    f" !_! {dir_name_without_artist} have more than {MAX_PREFIX_DIR_COUNT} folders!"
+                    f" {dir_names_with_starter}"
+                )
                 continue
 
             # Append
@@ -130,7 +133,8 @@ def merge_split_folders(root_dir: Path) -> None:
         print("Duplicate!")
         for name in duplicate_list:
             print(f" -> {name}")
-        raise ValueError(f"Found duplicate target directories: {duplicate_list}")
+        msg = f"Found duplicate target directories: {duplicate_list}"
+        raise ValueError(msg)
 
     # Confirm
     for target_dir_name, from_dir_name in pairs:
@@ -264,7 +268,7 @@ def remove_unneed_media_files(root_dir: Path, rule: list[tuple[list[str], list[s
         rule = []
     if len(rule) == 0:
         for i, _rule in enumerate(REMOVE_MEDIA_FILE_RULES):
-            print(f"- {i}: {REMOVE_MEDIA_FILE_RULES[i]}")
+            print(f"- {i}: {_rule}")
         selection_str = input("Select Preset (Default: 0):")
         selection = 0
         if len(selection_str) > 0:
@@ -302,7 +306,8 @@ def move_out_works(target_root_dir: Path) -> None:
 
 
 SIMILARITY_NAME_TRIGGER = 0.7
-SIMILARITY_CONTENT_TRIGGER = 0.8
+# 同名目录前缀检查时允许的最大同名前缀目录数
+MAX_PREFIX_DIR_COUNT = 2
 
 
 def _subdir_names(dir_path: Path) -> list[str]:
@@ -398,9 +403,11 @@ def move_works_with_same_name(root_dir_from: Path, root_dir_to: Path) -> None:
         root_dir_to (Path): 目标文件夹路径
     """
     if not root_dir_from.is_dir():
-        raise ValueError(f"源路径不存在或不是目录: {root_dir_from}")
+        msg = f"源路径不存在或不是目录: {root_dir_from}"
+        raise ValueError(msg)
     if not root_dir_to.is_dir():
-        raise ValueError(f"目标路径不存在或不是目录: {root_dir_to}")
+        msg = f"目标路径不存在或不是目录: {root_dir_to}"
+        raise ValueError(msg)
 
     pairs, rejected = _match_dir_pairs(root_dir_from, [root_dir_to])
     _print_match_report(pairs, rejected)
@@ -433,7 +440,8 @@ def move_works_with_same_name_to_siblings(root_dir_from: Path) -> None:
         root_dir_from (Path): 源文件夹路径
     """
     if not root_dir_from.is_dir():
-        raise ValueError(f"源路径不存在或不是目录: {root_dir_from}")
+        msg = f"源路径不存在或不是目录: {root_dir_from}"
+        raise ValueError(msg)
 
     parent_dir = root_dir_from.parent
     root_base_name = root_dir_from.name

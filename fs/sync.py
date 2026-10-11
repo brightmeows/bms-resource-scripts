@@ -36,7 +36,7 @@ class SoftSyncPreset:
         check_file_mtime: bool = True,
         check_file_sha512: bool = False,
         remove_src_same_files: bool = False,
-        exec: SoftSyncExec = SoftSyncExec.COPY,
+        command: SoftSyncExec = SoftSyncExec.COPY,
     ) -> None:
         if no_activate_ext_bound_pairs is None:
             no_activate_ext_bound_pairs = []
@@ -54,12 +54,12 @@ class SoftSyncPreset:
         self.check_file_mtime = check_file_mtime
         self.check_file_sha512 = check_file_sha512
         self.remove_src_same_files = remove_src_same_files
-        self.exec = exec
+        self.command = command
 
     def __str__(self) -> str:
         ret = f"{self.name}："
         # Copy/Move
-        ret += f"{self.exec}"
+        ret += f"{self.command}"
         ret += " "
         # Ext
         if self.allow_other_exts:
@@ -100,9 +100,7 @@ def get_file_sha512(file_path: Path) -> str:
     with file_path.open("rb") as f:
         b = f.read()
         h.update(b)
-    ret = h.hexdigest()
-    # print(f" - {file_path}: {ret}")
-    return ret
+    return h.hexdigest()
 
 
 SYNC_PRESET_DEFAULT = SoftSyncPreset()
@@ -113,7 +111,7 @@ SYNC_PRESET_FOR_APPEND = SoftSyncPreset(
     check_file_sha512=True,
     remove_src_same_files=True,
     remove_dst_extra_files=False,
-    exec=SoftSyncExec.NONE,
+    command=SoftSyncExec.NONE,
 )
 SYNC_PRESET_FLAC = SoftSyncPreset(allow_src_exts=["flac"], allow_other_exts=False, remove_dst_extra_files=False)
 SYNC_PRESET_MP4_AVI = SoftSyncPreset(
@@ -123,7 +121,7 @@ SYNC_PRESET_CACHE = SoftSyncPreset(
     allow_src_exts=["mp4", "avi", "flac"],
     allow_other_exts=False,
     remove_dst_extra_files=False,
-    exec=SoftSyncExec.NONE,
+    command=SoftSyncExec.NONE,
 )
 
 SYNC_PRESETS: list[SoftSyncPreset] = [
@@ -219,7 +217,7 @@ def sync_folder(
             # Replace: Exec
             if not dst_file_exists or not is_same_file:
                 src_mtime = src_path.stat().st_mtime
-                match preset.exec:
+                match preset.command:
                     case SoftSyncExec.NONE:
                         pass
                     case SoftSyncExec.COPY:
@@ -249,10 +247,9 @@ def sync_folder(
             else:
                 _dst_remove_dirs.append(dst_element)
                 shutil.rmtree(dst_path)
-        elif dst_path.is_file():
-            if not src_path.is_file():
-                _dst_remove_files.append(dst_element)
-                dst_path.unlink()
+        elif dst_path.is_file() and not src_path.is_file():
+            _dst_remove_files.append(dst_element)
+            dst_path.unlink()
 
     # Print
     if (

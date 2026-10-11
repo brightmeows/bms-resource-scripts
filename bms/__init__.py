@@ -23,8 +23,8 @@ def get_dir_bms_list(dir_path: Path) -> list[BMSInfo]:
     """仅寻找该目录第一层的文件"""
     info_list: list[BMSInfo] = []
     # For BOFTT
-    id = dir_path.name.split(".")[0] if "." in dir_path.name else dir_path.name
-    encoding = BOFTT_ID_SPECIFIC_ENCODING_TABLE.get(id)
+    work_id = dir_path.name.split(".")[0] if "." in dir_path.name else dir_path.name
+    encoding = BOFTT_ID_SPECIFIC_ENCODING_TABLE.get(work_id)
     # Scan
     for file_path in dir_path.iterdir():
         # Parse

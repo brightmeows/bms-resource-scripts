@@ -3,6 +3,9 @@ from pathlib import Path
 
 from fs.move import is_dir_having_file
 
+# bms_dir_similarity 的默认判定阈值（媒体文件名交集率）
+SIMILARITY_CONTENT_TRIGGER = 0.8
+
 
 def remove_empty_folder(parent_dir: Path) -> None:
     for dir_path in parent_dir.iterdir():
@@ -52,5 +55,4 @@ def bms_dir_similarity(dir_path_a: Path, dir_path_b: Path) -> float:
     if not file_set_b or not media_set_b or not non_media_set_b:
         return 0.0
     media_set_merge = media_set_a.intersection(media_set_b)
-    media_ratio = len(media_set_merge) / min(len(media_set_a), len(media_set_b))
-    return media_ratio
+    return len(media_set_merge) / min(len(media_set_a), len(media_set_b))

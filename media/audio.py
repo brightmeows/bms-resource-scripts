@@ -12,13 +12,13 @@ Audio
 
 
 class AudioPreset:
-    def __init__(self, exec: str, output_format: str, arg: str | None = None) -> None:
-        self.exec = exec
+    def __init__(self, command: str, output_format: str, arg: str | None = None) -> None:
+        self.command = command
         self.output_format = output_format
         self.arg = arg
 
     def __str__(self) -> str:
-        return f"AudioPreset {{ exec: {self.exec}, output_format: {self.output_format} arg: {self.arg} }}"
+        return f"AudioPreset {{ command: {self.command}, output_format: {self.output_format} arg: {self.arg} }}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -57,16 +57,15 @@ def _get_audio_precess_cmd(
 ) -> str:
     # Execute
     arg = preset.arg if preset.arg is not None else ""
-    if preset.exec == "oggenc":
+    if preset.command == "oggenc":
         return f'oggenc {arg} "{file_path}" -o "{output_file_path}"'
-    elif preset.exec == "flac":
+    if preset.command == "flac":
         return f'flac {arg} "{file_path}" -o "{output_file_path}"'
-    else:
-        return ""
+    return ""
 
 
 def transfer_audio_by_format_in_dir(
-    dir: Path,
+    dir_path: Path,
     input_exts: list[str],
     presets: list[AudioPreset],
     remove_origin_file_when_success: bool = True,
@@ -82,8 +81,8 @@ def transfer_audio_by_format_in_dir(
     disk for manual handling; they are never deleted.
     """
 
-    def check_input_file(dir: Path, file_name: str, input_exts: list[str]) -> Path | None:
-        file_path = dir / file_name
+    def check_input_file(dir_path: Path, file_name: str, input_exts: list[str]) -> Path | None:
+        file_path = dir_path / file_name
         if not file_path.is_file():
             return None
         # Check ext
@@ -93,7 +92,7 @@ def transfer_audio_by_format_in_dir(
                 ext_found = ext
         if ext_found is None:
             return None
-        return dir / file_name
+        return dir_path / file_name
 
     def get_output_file_path(file_path: Path, preset: AudioPreset) -> Path:
         return file_path.parent / (file_path.stem + "." + preset.output_format)
@@ -126,7 +125,8 @@ def transfer_audio_by_format_in_dir(
         # stderr must go to a real file: with a pipe, a chatty encoder blocks
         # forever once the 64KB pipe buffer fills up, because nothing drains
         # it while we only poll the process.
-        stderr_file = tempfile.TemporaryFile(mode="w+b")
+        # 需要在轮询子进程期间保持打开，不能交给 with 管理生命周期
+        stderr_file = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=stderr_file)
         return _AudioProcess(file_path, preset_index, process, stderr_file, False)
 
@@ -134,19 +134,19 @@ def transfer_audio_by_format_in_dir(
     error_reports: list[str] = []
 
     # 创建线程池
-    hdd = dir.drive.upper() != "C:"
+    hdd = dir_path.drive.upper() != "C:"
     max_workers = min(multiprocessing.cpu_count(), 24) if hdd else multiprocessing.cpu_count()
 
     # Submit
     processes: list[_AudioProcess] = []
     task_args: list[tuple[Path, int, AudioPreset]] = [
-        (dir / file_name, 0, presets[0])
-        for file_name in [p.name for p in dir.iterdir()]
-        if check_input_file(dir, file_name, input_exts) is not None
+        (dir_path / file_name, 0, presets[0])
+        for file_name in [p.name for p in dir_path.iterdir()]
+        if check_input_file(dir_path, file_name, input_exts) is not None
     ]
 
     if len(task_args) > 0:
-        print("Entering dir:", dir, "Input ext:", input_exts)
+        print("Entering dir:", dir_path, "Input ext:", input_exts)
         print("Preset:", presets)
 
     # Count
@@ -210,7 +210,7 @@ def transfer_audio_by_format_in_dir(
         # 切换下个预设
         for task in switch_next_list:
             new_preset_index = task.preset_index + 1
-            if new_preset_index not in range(0, len(presets)):
+            if new_preset_index not in range(len(presets)):
                 # All presets failed. Never delete the origin file here.
                 has_error = True
                 if task.error_message is not None:

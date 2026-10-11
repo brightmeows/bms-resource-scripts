@@ -20,7 +20,7 @@ BOFTT_ID_SPECIFIC_ENCODING_TABLE: dict[str, str] = {
 
 
 class PriorityDecoder:
-    def __init__(self, encoding_priority: list[str], final: str = "utf-8"):
+    def __init__(self, encoding_priority: list[str], final: str = "utf-8") -> None:
         """
         初始化优先级解码器
 
@@ -51,9 +51,9 @@ class PriorityDecoder:
                 for length in range(1, min(5, len(byte_data) - start + 1)):
                     try:
                         char = codec.decode(byte_data[start : start + length])[0]
-                        return char, length
                     except UnicodeDecodeError:
                         continue
+                    return char, length
             except (UnicodeDecodeError, LookupError):
                 continue
         return None, 1  # 所有编码都失败，默认消耗1个字节
@@ -78,19 +78,19 @@ class PriorityDecoder:
 
             if char is not None:
                 result.append(char)
-            else:
-                # 处理解码失败的字节
-                if errors == "strict":
-                    msg = f"无法用任何编码解码字节: {byte_data[position : position + 1]!r}"
-                    raise UnicodeDecodeError(
-                        "priority_decode",
-                        byte_data,
-                        position,
-                        position + 1,
-                        msg,
-                    )
-                elif errors == "replace":
-                    result.append("�")
+            # 处理解码失败的字节
+            elif errors == "strict":
+                msg = f"无法用任何编码解码字节: {byte_data[position : position + 1]!r}"
+                codec_error_kind = "priority_decode"
+                raise UnicodeDecodeError(
+                    codec_error_kind,
+                    byte_data,
+                    position,
+                    position + 1,
+                    msg,
+                )
+            elif errors == "replace":
+                result.append("�")
                 # ignore模式不做任何操作
 
             position += consumed
