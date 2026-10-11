@@ -10,6 +10,10 @@ ENCODINGS = [
     "shift-jisx0213",
 ]
 
+# BOF:TT 活动里有几个作品的文件编码判定失败，按作品编号手动指定优先编码。
+# 该表只对 BOF:TT 有效：编号在其它活动会撞车（例如 134、191 在任何活动都存在），
+# 因此通用路径不再自动套用，需要时由调用方显式传入
+# （见 bms.get_dir_bms_list 的 id_encoding_table 参数）。
 BOFTT_ID_SPECIFIC_ENCODING_TABLE: dict[str, str] = {
     "134": "utf-8",
     "191": "gbk",
@@ -27,7 +31,8 @@ class PriorityDecoder:
         Args:
             encoding_priority (List[str]): 编码优先级列表，靠前的编码优先级更高
         """
-        self.encoding_priority = encoding_priority
+        # 拷贝一份，避免调用方列表被就地修改
+        self.encoding_priority = list(encoding_priority)
         # 预加载所有编码的编解码器
         self.codecs = {enc: codecs.lookup(enc) for enc in encoding_priority}
         # TODO: Impl Final
@@ -120,18 +125,39 @@ def read_file_with_priority(file_path: Path, encoding_priority: list[str], error
         return None
 
 
-def get_bms_file_str(file_bytes: bytes, encoding: str | None = None) -> str:
-    file_str = ""
-    encoding_priority = ENCODINGS
-    if encoding:
-        encoding_priority.insert(0, encoding)
-    decoder = PriorityDecoder(encoding_priority)
-    try:
-        file_str = decoder.decode(file_bytes, errors="strict")
-    except UnicodeDecodeError:
-        file_str = file_bytes.decode("utf-8", errors="ignore")
+def _build_encoding_priority(encoding: str | None = None) -> list[str]:
+    """候选编码顺序：显式指定的排在先，其次 UTF-8，最后是历史优先级；去重保序。"""
+    priority = [encoding] if encoding else []
+    priority.extend(["utf-8", *ENCODINGS])
+    return list(dict.fromkeys(priority))
 
-    return file_str
+
+def get_bms_file_str(file_bytes: bytes, encoding: str | None = None) -> str:
+    """解码 BMS 文本。
+
+    先按候选编码整体严格解码（UTF-8 优先），全部失败才退回逐字符解码，
+    用于处理混合编码的文件。不能用逐字符优先的方式读整份文件：
+    UTF-8 文本会被 Shift-JIS 逐字拼成乱码。
+    """
+    priority = _build_encoding_priority(encoding)
+    for enc in priority:
+        try:
+            return file_bytes.decode(enc, errors="strict")
+        except (UnicodeDecodeError, LookupError):
+            continue
+    decoder = PriorityDecoder(priority)
+    try:
+        return decoder.decode(file_bytes, errors="strict")
+    except UnicodeDecodeError:
+        return file_bytes.decode("utf-8", errors="ignore")
+
+
+def get_bmson_file_str(file_bytes: bytes, encoding: str | None = None) -> str:
+    """BMSON 规范固定 UTF-8；只在 UTF-8 解码失败时才回退到优先级解码器。"""
+    try:
+        return file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return get_bms_file_str(file_bytes, encoding)
 
 
 # 解码器测试

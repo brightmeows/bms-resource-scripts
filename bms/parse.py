@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from bms.encoding import get_bms_file_str
+from bms.encoding import get_bms_file_str, get_bmson_file_str
 
 
 class BMSDifficulty(Enum):
@@ -78,7 +78,7 @@ def parse_bmson_file(file_path: Path, encoding: str | None = None) -> BMSInfo:
     playlevel = 0
     with file_path.open("rb") as file:
         file_bytes = file.read()
-        file_str = get_bms_file_str(file_bytes, encoding)
+        file_str = get_bmson_file_str(file_bytes, encoding)
 
         try:
             bmson_info: dict[Any, Any] = json.loads(file_str)
