@@ -160,6 +160,17 @@ bms-resource-scripts/
 - [Gitee 仓库](https://gitee.com/MiyakoMeow/bms-resource-scripts)
 - BOFTT 大包下载：[123云盘](https://www.123pan.com/s/Sn7lVv-Mhzm)（提取码：ORtY）
 
+## 开发
+
+仓库约定、命令与钩子说明见 [AGENTS.md](AGENTS.md)。提交前安装钩子：
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
+交互式菜单用 `uv run main.py`；`uv run ruff check --fix .` 与 `uv run ty check` 分别做 lint 修复与类型检查。
+
 ## 许可证
 
 Apache License 2.0
