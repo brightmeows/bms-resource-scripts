@@ -3,6 +3,9 @@ from enum import Enum
 
 from options import Option
 
+# 输入“起止两个编号”时的 token 数
+TWO_WORK_NUMBERS = 2
+
 
 class BMSEvent(Enum):
     BOFTT = 20
@@ -53,21 +56,21 @@ def jump_to_work_info() -> None:
             if len(token) == 0:
                 continue
             nums.append(int(token))
-        if len(nums) > 2:
+        if len(nums) > TWO_WORK_NUMBERS:
             for num_val in nums:
                 webbrowser.open_new_tab(event.work_info_url(num_val))
-        elif len(nums) == 2:
+        elif len(nums) == TWO_WORK_NUMBERS:
             start, end = int(nums[0]), int(nums[1])
             if start > end:
                 start, end = end, start
-            for id in range(start, end + 1):
-                webbrowser.open_new_tab(event.work_info_url(id))
+            for work_id in range(start, end + 1):
+                webbrowser.open_new_tab(event.work_info_url(work_id))
 
         elif len(num_str) > 0:
             if num_str.isdigit():
                 print(f"Open no.{num_str}")
-                id = int(num_str)
-                webbrowser.open_new_tab(event.work_info_url(id))
+                work_id = int(num_str)
+                webbrowser.open_new_tab(event.work_info_url(work_id))
             else:
                 print("Please input vaild number.")
         else:

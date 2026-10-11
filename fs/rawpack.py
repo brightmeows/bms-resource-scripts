@@ -1,3 +1,4 @@
+import contextlib
 import multiprocessing
 import os
 import shutil
@@ -11,6 +12,9 @@ import rarfile  # type: ignore[import-untyped]
 
 from bms import CHART_FILE_EXTS
 from fs.move import move_elements_across_dir
+
+# 解压缓存只含一个子目录且顶层文件数达到该值时，视为松散布局，不再下钻
+LOOSE_LAYOUT_FILE_COUNT = 10
 
 
 def _safe_join(base_dir: Path, relative_path: Path) -> Path:
@@ -27,7 +31,8 @@ def _safe_join(base_dir: Path, relative_path: Path) -> Path:
         candidate.relative_to(base_dir_norm)
     except ValueError:
         # Different drives or invalid path -> unsafe
-        raise ValueError(f"Unsafe path detected: {relative_path}") from None
+        msg = f"Unsafe path detected: {relative_path}"
+        raise ValueError(msg) from None
     return candidate
 
 
@@ -37,10 +42,8 @@ def _set_mtime(target_path: Path, date_time_tuple: tuple[int, int, int, int, int
         f"{date_time_tuple[0]}/{date_time_tuple[1]}/{date_time_tuple[2]} {date_time_tuple[3]}:{date_time_tuple[4]}"
     )
     d_timearry = time.mktime(time.strptime(d_gettime, "%Y/%m/%d %H:%M"))
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.utime(target_path, (d_timearry, d_timearry))
-    except FileNotFoundError:
-        pass
 
 
 def _try_decode_cp932_from_cp437(name: str) -> str | None:
@@ -182,7 +185,7 @@ def move_out_files_in_folder_in_cache_dir(cache_dir_path: Path) -> bool:
         if cache_folder_count == 0:
             done = True
 
-        if cache_folder_count == 1 and cache_file_count >= 10:
+        if cache_folder_count == 1 and cache_file_count >= LOOSE_LAYOUT_FILE_COUNT:
             done = True
 
         if cache_folder_count > 1:
@@ -214,10 +217,8 @@ def move_out_files_in_folder_in_cache_dir(cache_dir_path: Path) -> bool:
             # Move
             print(f" - Moving inner files in {inner_dir_path} to {cache_dir_path}")
             move_elements_across_dir(inner_dir_path, cache_dir_path)
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 inner_dir_path.rmdir()
-            except FileNotFoundError:
-                pass
 
     if error:
         return False

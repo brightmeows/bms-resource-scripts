@@ -20,5 +20,5 @@ def get_valid_fs_name(ori_name: str) -> str:
     )
 
 
-def get_work_folder_name(id: str, info: BMSInfo) -> str:
-    return f"{id}. {get_valid_fs_name(info.title)} [{get_valid_fs_name(info.artist)}]"
+def get_work_folder_name(work_id: str, info: BMSInfo) -> str:
+    return f"{work_id}. {get_valid_fs_name(info.title)} [{get_valid_fs_name(info.artist)}]"

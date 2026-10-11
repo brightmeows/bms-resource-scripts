@@ -25,13 +25,13 @@ git clone https://gitee.com/MiyakoMeow/bms-resource-scripts
 cd bms-resource-scripts
 ```
 
-2. 使用 uv 安装依赖（推荐）：
+1. 使用 uv 安装依赖（推荐）：
 
 ```bash
 uv sync
 ```
 
-3. 配置外部工具：
+1. 配置外部工具：
 
 将 ffmpeg、flac、oggenc 的可执行文件所在目录添加到系统 Path 环境变量。
 
@@ -50,15 +50,15 @@ uv run main.py
 ### BMS 解析
 
 | 功能 | 说明 |
-|------|------|
+| --- | --- |
 | 跳转至作品信息页 | 打开 BMS 活动作品页面 |
 
 ### BMS 根目录
 
 | 功能 | 说明 |
-|------|------|
-| 按照 BMS 设置文件夹名 | 根据 BMS 文件信息重命名文件夹为"标题 [艺术家]" |
-| 按照 BMS 追加文件夹名 | 在现有文件夹名后追加"标题 [艺术家]" |
+| --- | --- |
+| 按照 BMS 设置文件夹名 | 根据 BMS 文件信息重命名文件夹为“标题 [艺术家]” |
+| 按照 BMS 追加文件夹名 | 在现有文件夹名后追加“标题 [艺术家]” |
 | 按照 BMS 追加文件夹艺术家名 | 仅追加艺术家名称 |
 | 克隆带编号的文件夹名 | 将源目录的带编号文件夹名同步到目标目录 |
 | 扫描相似文件夹名 | 检测名称相似的文件夹 |
@@ -68,7 +68,7 @@ uv run main.py
 ### BMS 大包目录
 
 | 功能 | 说明 |
-|------|------|
+| --- | --- |
 | 将该目录下的作品，按照首字符分成多个文件夹 | 按首字符（A-Z、平假名、片假名、汉字等）分类 |
 | 将目录A下的作品，移动到目录B | 移动并合并作品目录 |
 | 移出一层目录 | 减少一层目录嵌套 |
@@ -77,14 +77,14 @@ uv run main.py
 ### BMS 媒体
 
 | 功能 | 说明 |
-|------|------|
+| --- | --- |
 | 音频转换 | WAV ↔ FLAC、FLAC → OGG 等格式转换 |
 | 视频转换 | MP4 → AVI/WMV/MPEG，512x512/480p 分辨率转换 |
 
 ### BMS 原文件
 
 | 功能 | 说明 |
-|------|------|
+| --- | --- |
 | 将赋予编号的文件解压或放置至指定根目录 | 自动处理编号文件，解压到对应编号目录 |
 | 将文件解压或放置至指定根目录 | 按原文件名创建目录 |
 | 赋予编号 | 为文件添加数字前缀编号 |
@@ -92,14 +92,14 @@ uv run main.py
 ### 大包脚本
 
 | 功能 | 说明 |
-|------|------|
+| --- | --- |
 | 原包 → HQ版大包 | 从原始压缩包生成 HQ 版本大包 |
 | HQ版大包 → LQ版大包 | 将 HQ 版转换为 LR2 兼容的 LQ 版 |
 | 差分包更新 | 生成增量更新包 |
 
 ## 目录结构
 
-```
+```text
 bms-resource-scripts/
 ├── bms/                    # BMS 文件解析模块
 │   ├── parse.py           # BMS/BMSON 文件解析
@@ -159,6 +159,17 @@ bms-resource-scripts/
 
 - [Gitee 仓库](https://gitee.com/MiyakoMeow/bms-resource-scripts)
 - BOFTT 大包下载：[123云盘](https://www.123pan.com/s/Sn7lVv-Mhzm)（提取码：ORtY）
+
+## 开发
+
+仓库约定、命令与钩子说明见 [AGENTS.md](AGENTS.md)。提交前安装钩子：
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
+交互式菜单用 `uv run main.py`；`uv run ruff check --fix .` 与 `uv run ty check` 分别做 lint 修复与类型检查。
 
 ## 许可证
 

@@ -1,0 +1,75 @@
+# pre-commit 钩子（本地，language: system）
+#
+# 安装：pre-commit install
+# 手动全量：pre-commit run --all-files
+#
+# 约定：
+# - 钩子只检查、不改写文件；修复用 uv run ruff check --fix 与 uv run ruff format
+# - 每个 hook 独立 `- repo: local` 块，使 pre-commit 并发执行（同 repo 块内串行）
+# - 系统依赖：uv、python3、markdownlint（markdownlint-cli）、rg（ripgrep）
+
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: ty-check
+        name: ty check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        entry: markdownlint --config .markdownlint.toml
+        language: system
+        types: [markdown]
+
+  # 简体中文引号规范（GB/T 15834-2011）：中文文本用弯引号，禁用直引号与
+  # 直角/全角无向引号；代码块与行内代码不扫。
+  - repo: local
+    hooks:
+      - id: cn-quotes
+        name: Chinese quotes follow GB/T 15834-2011
+        entry: python3 tools/check-cn-quotes.py
+        language: system
+        types: [markdown]
+
+  # 检测与 ASCII 等价的混淆字符（各种连字符、窄空格、零宽字符、BOM）
+  - repo: local
+    hooks:
+      - id: no-confusable-unicode
+        name: no confusable Unicode dashes/spaces (use ASCII instead)
+        entry: bash tools/check-confusables.sh
+        language: system
+        types: [text]
+
+  # 提交信息遵循 Conventional Commits（见 AGENTS.md「提交」节）
+  - repo: local
+    hooks:
+      - id: conventional-commit
+        name: commit message follows Conventional Commits
+        entry: python3 tools/check-commit-msg.py
+        language: system
+        stages: [commit-msg]

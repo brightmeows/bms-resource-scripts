@@ -17,6 +17,14 @@ _CURRENT_DIR = _CURRENT_PATH.parent
 
 _LOG_FILE_PATH = _CURRENT_DIR / "history.log"
 
+# 历史路径展示条数
+DISPLAY_PATH_COUNT = 5
+
+
+def callable_name(func: Callable[..., object]) -> str:
+    """取可调用对象的展示名：函数用 __name__，其它退化到类型名。"""
+    return getattr(func, "__name__", type(func).__name__)
+
 
 def _path_mark(path: Path) -> str:
     """历史条目的实时状态标记：只在展示时计算，不写回历史文件。"""
@@ -67,11 +75,11 @@ def input_path(allow_missing: bool = False) -> Path:
     # 显示历史路径（只显示最近的5个），失效条目附加实时标记
     if len(paths) > 0:
         print("输入路径开始。以下是之前使用过的路径：")
-        display_paths = paths[:5]  # 只显示最近的5个
+        display_paths = paths[:DISPLAY_PATH_COUNT]  # 只显示最近的几个
         for i, path in enumerate(display_paths):
             print(f" -> {i}: {path}{_path_mark(path)}")
-        if len(paths) > 5:
-            print(f"（还有 {len(paths) - 5} 个历史路径，输入？查看全部）")
+        if len(paths) > DISPLAY_PATH_COUNT:
+            print(f"（还有 {len(paths) - DISPLAY_PATH_COUNT} 个历史路径，输入？查看全部）")
 
     # 获取用户输入，直到得到符合要求的路径
     while True:
@@ -170,7 +178,7 @@ class Option:
     confirm: ConfirmType = ConfirmType.DefaultYes
 
     def exec(self) -> None:
-        print(self.name if self.name else self.func.__name__)
+        print(self.name or callable_name(self.func))
         # Input
         args = []
         for i, input_arg in enumerate(self.inputs):
@@ -194,7 +202,7 @@ class Option:
                     print(f" - 检查 {idx} 异常：{e}")
                     return
                 if not passed:
-                    print(f" - 检查未通过（第 {idx} 项：{getattr(check, '__name__', str(check))}）。")
+                    print(f" - 检查未通过（第 {idx} 项：{callable_name(check)}）。")
                     return
         # Confirm
         match self.confirm:
@@ -242,20 +250,20 @@ def is_root_dir(*args: Any) -> bool:
 
 
 def is_work_dir(*root_dir: Path) -> bool:
-    for dir in root_dir:
-        result = len([p.name for p in dir.iterdir() if p.name.endswith(CHART_FILE_EXTS) and p.is_file()]) > 0
+    for dir_path in root_dir:
+        result = len([p.name for p in dir_path.iterdir() if p.name.endswith(CHART_FILE_EXTS) and p.is_file()]) > 0
         if not result:
             return False
     return True
 
 
-def is_not_a_dir(dir: Path) -> bool:
-    return not dir.is_dir()
+def is_not_a_dir(dir_path: Path) -> bool:
+    return not dir_path.is_dir()
 
 
 # === Exec checks (split by executable) ===
 def _check_exec(cmd: str, name: str) -> bool:
-    run = subprocess.run(cmd, shell=True, stdin=subprocess.PIPE, capture_output=True)
+    run = subprocess.run(cmd, shell=True, stdin=subprocess.PIPE, capture_output=True, check=False)
     if run.returncode != 0:
         print(f' - 未找到或无法执行 {name}（命令 "{cmd}" 失败）。')
         return False

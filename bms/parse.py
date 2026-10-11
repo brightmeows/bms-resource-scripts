@@ -16,6 +16,12 @@ class BMSDifficulty(Enum):
     Insane = 5
 
 
+# #PLAYLEVEL 的合法上限，超出按无效处理
+PLAYLEVEL_MAX = 99.0
+# BMSDifficulty 枚举合法上限（Insane = 5）
+DIFFICULTY_MAX = BMSDifficulty.Insane.value
+
+
 @dataclass
 class BMSInfo:
     title: str
@@ -37,8 +43,8 @@ def parse_bms_file(file_path: Path, encoding: str | None = None) -> BMSInfo:
         file_bytes = file.read()
         file_str = get_bms_file_str(file_bytes, encoding)
 
-        for line in file_str.splitlines():
-            line = line.strip()
+        for raw_line in file_str.splitlines():
+            line = raw_line.strip()
             if line.startswith("#ARTIST"):
                 artist = line.replace("#ARTIST", "").strip()
             elif line.startswith("#TITLE"):
@@ -49,12 +55,12 @@ def parse_bms_file(file_path: Path, encoding: str | None = None) -> BMSInfo:
                 value_str = line.replace("#PLAYLEVEL", "").strip()
                 if len(value_str) > 0 and value_str.isdecimal():
                     playlevel_float = float(value_str)
-                    playlevel = int(playlevel_float) if 0.0 <= playlevel_float <= 99.0 else -1
+                    playlevel = int(playlevel_float) if 0.0 <= playlevel_float <= PLAYLEVEL_MAX else -1
             elif line.startswith("#DIFFICULTY"):
                 value_str = line.replace("#DIFFICULTY", "").strip()
                 if len(value_str) > 0 and value_str.isdecimal():
                     value = int(float(value_str))
-                    difficulty = BMSDifficulty(value) if 0 <= value <= 5 else BMSDifficulty.Unknown
+                    difficulty = BMSDifficulty(value) if 0 <= value <= DIFFICULTY_MAX else BMSDifficulty.Unknown
             elif line.startswith("#BMP"):
                 value_str = line.replace("#BMP", "").strip()
                 ext = Path(value_str).suffix

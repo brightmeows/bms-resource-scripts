@@ -1,4 +1,3 @@
-import copy
 import json
 import subprocess
 from pathlib import Path
@@ -17,6 +16,7 @@ def get_media_file_probe(file_path: Path) -> dict[Any, Any]:
         shell=True,
         stdout=subprocess.PIPE,
         text=True,
+        check=False,
     )
     out = result.stdout
     return cast(dict[Any, Any], json.loads(out))
@@ -69,14 +69,14 @@ Video
 class VideoPreset:
     def __init__(
         self,
-        exec: str,
+        command: str,
         input_arg: str | None,
         fliter_arg: str | None,
         output_file_ext: str,
         output_codec: str,
         arg: str | None = None,
     ) -> None:
-        self.exec = exec
+        self.command = command
         self.input_arg = input_arg
         self.fliter_arg = fliter_arg
         self.output_file_ext = output_file_ext
@@ -84,7 +84,7 @@ class VideoPreset:
         self.arg = arg
 
     def __str__(self) -> str:
-        return f"VideoPreset {{ exec: {self.exec}, output_format: {self.output_codec} }}"
+        return f"VideoPreset {{ command: {self.command}, output_format: {self.output_codec} }}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -95,9 +95,9 @@ class VideoPreset:
     def get_video_process_cmd(self, input_file_path: Path, output_file_path: Path) -> str:
         input_arg = self.input_arg if self.input_arg is not None else ""
         fliter_arg = self.fliter_arg if self.fliter_arg is not None else ""
-        inner_arg = "-map_metadata 0" if self.exec == "ffmpeg" else ""
+        inner_arg = "-map_metadata 0" if self.command == "ffmpeg" else ""
         return (
-            f'{self.exec} {input_arg} "{input_file_path}" '
+            f'{self.command} {input_arg} "{input_file_path}" '
             f"{fliter_arg} {inner_arg} -c:v {self.output_codec} "
             f'{self.arg} "{output_file_path}" '
         )
@@ -148,16 +148,15 @@ def get_prefered_preset_list(file_path: Path) -> list[VideoPreset]:
             VIDEO_PRESET_WMV2_480P,
             VIDEO_PRESET_AVI_480P,
         ]
-    else:
-        return [
-            VIDEO_PRESET_MPEG1VIDEO_512X512,
-            VIDEO_PRESET_WMV2_512X512,
-            VIDEO_PRESET_AVI_512X512,
-        ]
+    return [
+        VIDEO_PRESET_MPEG1VIDEO_512X512,
+        VIDEO_PRESET_WMV2_512X512,
+        VIDEO_PRESET_AVI_512X512,
+    ]
 
 
 def process_video_in_dir(
-    dir: Path,
+    dir_path: Path,
     input_exts: list[str] | None = None,
     presets: list[VideoPreset] | None = None,
     remove_origin_file: bool = True,
@@ -174,8 +173,8 @@ def process_video_in_dir(
         input_exts = ["mp4", "avi"]
     has_error = False
     file_name_list: list[str] = []
-    for file_name in [p.name for p in dir.iterdir()]:
-        file_path = dir / file_name
+    for file_name in [p.name for p in dir_path.iterdir()]:
+        file_path = dir_path / file_name
         if not file_path.is_file():
             continue
         # Check ext
@@ -189,12 +188,15 @@ def process_video_in_dir(
         file_name_list.append(file_name)
 
     if len(file_name_list) > 0:
-        print("Entering dir:", dir)
+        print("Entering dir:", dir_path)
 
+    # Origin files are only removed after the converted output is verified
+    # to exist and be non-empty. Files that fail every preset are kept.
     for file_name in file_name_list:
-        file_path = dir / file_name
-        # Get prefered
-        presets_for_file = copy.deepcopy(presets)
+        file_path = dir_path / file_name
+        # Get prefered. No deepcopy: the loop must keep object identity with
+        # presets so the last-preset error report below can match.
+        presets_for_file = presets
         if use_prefered:
             presets_new = get_prefered_preset_list(file_path)
             presets_new.extend(presets_for_file)
@@ -209,18 +211,26 @@ def process_video_in_dir(
                 if remove_existing_target_file:
                     output_file_path.unlink()
                 else:
+                    # Target already exists: same as a success, do not try
+                    # the remaining presets on this file.
                     print(f"File exists: {output_file_path}")
-                    continue
+                    if remove_origin_file and file_path.is_file():
+                        file_path.unlink()
+                    break
             # Process
             cmd = preset.get_video_process_cmd(file_path, output_file_path)
             print(f"Processing Video: {file_path} Preset: {preset}")
-            result = subprocess.run(cmd, shell=True, capture_output=True)
-            if result.returncode != 0:
+            result = subprocess.run(cmd, shell=True, capture_output=True, check=False)
+            output_verified = (
+                result.returncode == 0 and output_file_path.is_file() and output_file_path.stat().st_size > 0
+            )
+            if not output_verified:
                 if output_file_path.is_file():
                     output_file_path.unlink()
                 if preset is presets[-1]:
                     print("Has Error!")
                     print("Cmd: ", cmd)
+                    print("Return code: ", result.returncode)
                     print("Stdout:", result.stdout)
                     print("Stderr:", result.stderr)
                     has_error = True

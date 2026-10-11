@@ -6,7 +6,6 @@ from fs.rawpack import get_num_set_file_names
 from fs.sync import SYNC_PRESET_FOR_APPEND, sync_folder
 from media.audio import (
     AUDIO_PRESET_FLAC,
-    AUDIO_PRESET_FLAC_FFMPEG,
     AUDIO_PRESET_OGG_Q10,
     bms_folder_transfer_audio,
 )
@@ -42,9 +41,8 @@ def pack_raw_to_hq(root_dir: Path) -> None:
     bms_folder_transfer_audio(
         root_dir=root_dir,
         input_ext=["wav"],
-        transfer_mode=[AUDIO_PRESET_FLAC, AUDIO_PRESET_FLAC_FFMPEG],
+        transfer_mode=[AUDIO_PRESET_FLAC],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=True,
         stop_on_error=False,
     )
     # Remove Unneed Media File
@@ -61,7 +59,6 @@ def pack_hq_to_lq(root_dir: Path) -> None:
         input_ext=["flac"],
         transfer_mode=[AUDIO_PRESET_OGG_Q10],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=False,
         stop_on_error=False,
     )
     # Parse Audio
@@ -127,7 +124,7 @@ def pack_setup_rawpack_to_hq(pack_dir: Path, root_dir: Path) -> None:
     bms_folder_transfer_audio(
         root_dir=root_dir,
         input_ext=["wav"],
-        transfer_mode=[AUDIO_PRESET_FLAC, AUDIO_PRESET_FLAC_FFMPEG],
+        transfer_mode=[AUDIO_PRESET_FLAC],
         remove_origin_file_when_success=True,
         stop_on_error=False,
     )
@@ -187,7 +184,7 @@ def pack_update_rawpack_to_hq(pack_dir: Path, root_dir: Path, sync_dir: Path) ->
     bms_folder_transfer_audio(
         root_dir=root_dir,
         input_ext=["wav"],
-        transfer_mode=[AUDIO_PRESET_FLAC, AUDIO_PRESET_FLAC_FFMPEG],
+        transfer_mode=[AUDIO_PRESET_FLAC],
         remove_origin_file_when_success=True,
         stop_on_error=False,
     )
@@ -210,12 +207,12 @@ OPTIONS = [
             Input(InputType.Path, "Pack Dir"),
             Input(InputType.Path, "Root Dir", allow_missing=True),
         ],
-        check_func=[check_flac_exec, check_ffmpeg_exec],
+        check_func=[check_flac_exec],
     ),
     Option(
         func=pack_update_rawpack_to_hq,
         name="大包更新脚本：原包 -> HQ版大包",
-        check_func=[check_flac_exec, check_ffmpeg_exec, _pack_update_rawpack_to_hq_check],
+        check_func=[check_flac_exec, _pack_update_rawpack_to_hq_check],
         inputs=[
             Input(InputType.Path, "Pack Dir"),
             Input(InputType.Path, "Root Dir", allow_missing=True),
@@ -228,7 +225,7 @@ OPTIONS = [
         inputs=[
             Input(InputType.Path, "Root Dir"),
         ],
-        check_func=[check_flac_exec, check_ffmpeg_exec],
+        check_func=[check_flac_exec],
     ),
     Option(
         func=pack_hq_to_lq,

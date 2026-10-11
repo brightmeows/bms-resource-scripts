@@ -38,7 +38,6 @@ def transfer_audio(root_dir: Path) -> None:
         input_ext=list(AUDIO_FILE_EXTS),
         transfer_mode=[preset],
         remove_origin_file_when_success=True,
-        remove_origin_file_when_failed=False,
         stop_on_error=True,
     )
 
@@ -79,7 +78,7 @@ OPTIONS = [
         inputs=[
             Input(InputType.Path, "Root Dir"),
         ],
-        check_func=[is_root_dir, check_ffmpeg_exec, check_flac_exec, check_oggenc_exec],
+        check_func=[is_root_dir, check_flac_exec, check_oggenc_exec],
     ),
     Option(
         func=transfer_video,

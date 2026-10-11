@@ -16,20 +16,16 @@ def check_num_folder(bms_dir: Path, max_count: int) -> None:
 def create_num_folders(root_dir: Path, folder_count: int) -> None:
     existing_elements = [p.name for p in root_dir.iterdir() if p.is_dir()]
 
-    for id in range(1, folder_count + 1):
-        new_dir_name = f"{id}"
-        id_exists = False
+    for work_number in range(1, folder_count + 1):
+        new_dir_name = f"{work_number}"
+        work_number_exists = False
         for element_name in existing_elements:
             # 精确匹配或检查分隔符，避免 "1" 匹配到 "10"
-            if (
-                element_name == new_dir_name
-                or element_name.startswith(f"{new_dir_name}.")
-                or element_name.startswith(f"{new_dir_name} ")
-            ):
-                id_exists = True
+            if element_name == new_dir_name or element_name.startswith((f"{new_dir_name}.", f"{new_dir_name} ")):
+                work_number_exists = True
                 break
 
-        if id_exists:
+        if work_number_exists:
             continue
 
         new_dir_path = root_dir / new_dir_name

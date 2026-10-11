@@ -5,6 +5,7 @@ import options.bms_folder_event
 import options.bms_folder_media
 import options.rawpack
 import scripts.pack
+from options import callable_name
 
 OPTIONS = (
     options.bms_events.OPTIONS
@@ -38,7 +39,7 @@ def main() -> None:
         print(f"\n【{module_name}】")
         for option in module_options:
             option_map[current_number] = option
-            print(f" - {current_number}: {option.name if option.name else option.func.__name__}")
+            print(f" - {current_number}: {option.name or callable_name(option.func)}")
             current_number += 1
         # 跳到下一个十位数的开头
         current_number = ((current_number - 1) // 10 + 1) * 10 + 1

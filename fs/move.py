@@ -89,8 +89,7 @@ def move_elements_across_dir(
     def plan_move_file(ori_path: Path, dst_path: Path) -> tuple[Path, Path] | None:
         # Replace?
         file_ext = ori_path.suffix
-        if file_ext.startswith("."):
-            file_ext = file_ext[1:]
+        file_ext = file_ext.removeprefix(".")
         action = replace_options.ext.get(file_ext) or replace_options.default
 
         def plan_move() -> tuple[Path, Path]:
@@ -101,8 +100,7 @@ def move_elements_across_dir(
             for i in range(100):
                 name = dst_path.stem
                 ext = dst_path.suffix
-                if ext.startswith("."):
-                    ext = ext[1:]
+                ext = ext.removeprefix(".")
                 new_file_name = f"{name}.{i}.{ext}"
                 new_dst_path = dir_path_dst / new_file_name
                 # 并发下使用预占位避免冲突
@@ -131,24 +129,22 @@ def move_elements_across_dir(
             case ReplaceAction.CheckReplace:
                 if not dst_path.is_file():
                     return plan_move()
-                elif is_same_content(ori_path, dst_path):
+                if is_same_content(ori_path, dst_path):
                     # 内容相同？仍计划移动以统一位置
                     return plan_move()
-                else:
-                    return plan_move_rename()
+                return plan_move_rename()
 
     def plan_move_dir(ori_path: Path, dst_path: Path) -> tuple[Path, Path] | None:
         # 目录：若目标不存在则计划整体移动，否则递归后续
         if not dst_path.is_dir():
             return (ori_path, dst_path)
-        else:
-            next_folder_paths.append((ori_path, dst_path))
-            return None
+        next_folder_paths.append((ori_path, dst_path))
+        return None
 
     def plan_action(ori_path: Path, dst_path: Path) -> tuple[Path, Path] | None:
         if ori_path.is_file():
             return plan_move_file(ori_path, dst_path)
-        elif ori_path.is_dir():
+        if ori_path.is_dir():
             return plan_move_dir(ori_path, dst_path)
         return None
 
