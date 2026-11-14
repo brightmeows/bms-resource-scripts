@@ -1,9 +1,16 @@
 version: 2
+
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "dependencies"
+      - "automated"
+    open-pull-requests-limit: 20
     commit-message:
       prefix: "ci"
     groups:
@@ -11,13 +18,19 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "dependencies"
+      - "automated"
+    open-pull-requests-limit: 20
     commit-message:
       prefix: "deps"
     groups:
-      python-deps:
+      uv:
         patterns:
           - "*"
